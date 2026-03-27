@@ -9,23 +9,14 @@ export default function RootLayout() {
   const router = useRouter();
   const segments = useSegments();
 
+  // TODO: auth disabled for testing
   useEffect(() => {
     if (loading) return;
     const inAuthGroup = segments[0] === '(tabs)';
-    if (user && !inAuthGroup) {
+    if (!inAuthGroup) {
       router.replace('/(tabs)');
-    } else if (!user && inAuthGroup) {
-      router.replace('/login');
     }
-  }, [user, loading, segments]);
-
-  if (loading) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.background }}>
-        <ActivityIndicator size="large" color={Colors.primary} />
-      </View>
-    );
-  }
+  }, [loading, segments]);
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
