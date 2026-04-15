@@ -1,8 +1,15 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '../../hooks/useAuth';
+import { useSettings } from '../../hooks/useSettings';
+import { useT } from '../../lib/i18n';
 import { Colors } from '../../constants/theme';
 
 export default function TabLayout() {
+  const { user } = useAuth();
+  const { settings } = useSettings(user?.uid);
+  const t = useT(settings.language);
+
   return (
     <Tabs
       screenOptions={{
@@ -18,7 +25,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Dashboard',
+          title: t.tabDashboard,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="home-outline" size={size} color={color} />
           ),
@@ -27,7 +34,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="assets"
         options={{
-          title: 'Assets',
+          title: t.tabAssets,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="wallet-outline" size={size} color={color} />
           ),
@@ -36,16 +43,25 @@ export default function TabLayout() {
       <Tabs.Screen
         name="expenses"
         options={{
-          title: 'Expenses',
+          title: t.tabExpenses,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="receipt-outline" size={size} color={color} />
           ),
         }}
       />
       <Tabs.Screen
+        name="history"
+        options={{
+          title: t.tabHistory,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="time-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="settings"
         options={{
-          title: 'Settings',
+          title: t.tabSettings,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="settings-outline" size={size} color={color} />
           ),

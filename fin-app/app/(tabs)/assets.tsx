@@ -3,14 +3,14 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
+  ScrollView,
   TouchableOpacity,
   Modal,
   TextInput,
   Alert,
   KeyboardAvoidingView,
   Platform,
-  ScrollView,
+  FlatList,
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -20,17 +20,25 @@ import { useAssets } from '../../hooks/useAssets';
 import { useSettings } from '../../hooks/useSettings';
 import { addAsset, updateAsset, deleteAsset } from '../../lib/firestore';
 import { getCurrencies } from '../../lib/frankfurter';
+import { useT } from '../../lib/i18n';
 import type { Asset } from '../../lib/types';
 import { Colors, Spacing, Radius } from '../../constants/theme';
 
 type FormData = { name: string; amount: string; currency: string };
 const EMPTY_FORM: FormData = { name: '', amount: '', currency: 'PLN' };
 
+const COL_CURRENCY = 48;
+const COL_NAME = 1;
+const COL_AMOUNT = 110;
+const COL_DELETE = 36;
+
 export default function AssetsScreen() {
   const { user } = useAuth();
   const { assets, loading } = useAssets(user?.uid);
   const { settings } = useSettings(user?.uid);
+  const t = useT(settings.language);
 
+  const [infoVisible, setInfoVisible] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
   const [form, setForm] = useState<FormData>(EMPTY_FORM);
@@ -57,9 +65,9 @@ export default function AssetsScreen() {
 
   const handleSave = async () => {
     if (!user) return;
-    if (!form.name.trim()) return Alert.alert('Validation', 'Name is required');
+    if (!form.name.trim()) return Alert.alert('Validation', t.nameRequired);
     const amount = parseFloat(form.amount.replace(',', '.'));
-    if (isNaN(amount) || amount < 0) return Alert.alert('Validation', 'Enter a valid amount');
+    if (isNaN(amount) || amount < 0) return Alert.alert('Validation', t.invalidAmount);
 
     setSaving(true);
     try {
@@ -70,17 +78,17 @@ export default function AssetsScreen() {
       }
       setModalVisible(false);
     } catch {
-      Alert.alert('Error', 'Could not save asset');
+      Alert.alert('Error', t.saveError);
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = (asset: Asset) => {
-    Alert.alert('Delete Asset', `Delete "${asset.name}"?`, [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t.deleteAssetTitle, t.deleteAssetMsg(asset.name), [
+      { text: t.cancel, style: 'cancel' },
       {
-        text: 'Delete', style: 'destructive',
+        text: t.delete, style: 'destructive',
         onPress: () => user && deleteAsset(user.uid, asset.id),
       },
     ]);
@@ -93,9 +101,9 @@ export default function AssetsScreen() {
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.title}>Assets</Text>
-        <TouchableOpacity style={styles.addBtn} onPress={openAdd}>
-          <Ionicons name="add" size={22} color="#fff" />
+        <Text style={styles.title}>{t.assets}</Text>
+        <TouchableOpacity style={styles.infoBtn} onPress={() => setInfoVisible(true)}>
+          <Ionicons name="information-circle-outline" size={24} color={Colors.textSecondary} />
         </TouchableOpacity>
       </View>
 
@@ -104,64 +112,85 @@ export default function AssetsScreen() {
       ) : assets.length === 0 ? (
         <View style={styles.empty}>
           <Ionicons name="wallet-outline" size={48} color={Colors.border} />
-          <Text style={styles.emptyText}>No assets yet</Text>
-          <Text style={styles.emptySubText}>Tap + to add your first asset</Text>
+          <Text style={styles.emptyText}>{t.noAssets}</Text>
+          <Text style={styles.emptySubText}>{t.noAssetsHint}</Text>
         </View>
       ) : (
-        <FlatList
-          data={assets}
-          keyExtractor={(a) => a.id}
-          contentContainerStyle={styles.list}
-          renderItem={({ item }) => (
-            <View style={styles.card}>
-              <TouchableOpacity style={styles.cardMain} onPress={() => openEdit(item)}>
-                <View style={styles.currencyBadge}>
-                  <Text style={styles.currencyBadgeText}>{item.currency}</Text>
+        <View style={styles.tableWrapper}>
+          {/* Table header */}
+          <View style={styles.tableHeader}>
+            <View style={{ width: COL_CURRENCY }} />
+            <Text style={[styles.thCell, { flex: COL_NAME }]}>{t.name}</Text>
+            <Text style={[styles.thCell, styles.thRight, { width: COL_AMOUNT }]}>{t.amount}</Text>
+            <View style={{ width: COL_DELETE }} />
+          </View>
+
+          <ScrollView style={styles.tableBody} showsVerticalScrollIndicator={false}>
+            {assets.map((item, index) => (
+              <TouchableOpacity
+                key={item.id}
+                style={[
+                  styles.tableRow,
+                  index % 2 === 1 && styles.tableRowAlt,
+                ]}
+                onPress={() => openEdit(item)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.currencyBadge, { width: COL_CURRENCY - Spacing.xs }]}>
+                  <Text style={styles.currencyBadgeText} numberOfLines={1}>{item.currency}</Text>
                 </View>
-                <View style={styles.cardInfo}>
-                  <Text style={styles.cardName}>{item.name}</Text>
-                  <Text style={styles.cardAmount}>
-                    {item.amount.toLocaleString('pl-PL', { minimumFractionDigits: 2 })} {item.currency}
-                  </Text>
-                </View>
+                <Text style={[styles.tdName, { flex: COL_NAME }]} numberOfLines={1}>
+                  {item.name}
+                </Text>
+                <Text style={[styles.tdAmount, { width: COL_AMOUNT }]} numberOfLines={1}>
+                  {item.amount.toLocaleString('pl-PL', { minimumFractionDigits: 2 })}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => handleDelete(item)}
+                  style={[styles.tdCell, { width: COL_DELETE }]}
+                  hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                >
+                  <Ionicons name="trash-outline" size={16} color={Colors.danger} />
+                </TouchableOpacity>
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => handleDelete(item)} style={styles.deleteBtn}>
-                <Ionicons name="trash-outline" size={18} color={Colors.danger} />
-              </TouchableOpacity>
-            </View>
-          )}
-        />
+            ))}
+            <TouchableOpacity style={styles.addRow} onPress={openAdd} activeOpacity={0.5}>
+              <Ionicons name="add" size={16} color={Colors.textSecondary} />
+              <Text style={styles.addRowText}>{t.newAsset}</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
       )}
 
       {/* Add / Edit Modal */}
-      <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">
+      <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setModalVisible(false)}>
         <SafeAreaView style={styles.modalSafe}>
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
             <View style={styles.modalHeader}>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
-                <Text style={styles.modalCancel}>Cancel</Text>
+              <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.modalIconBtn}>
+                <Ionicons name="close" size={22} color={Colors.textSecondary} />
               </TouchableOpacity>
-              <Text style={styles.modalTitle}>{editingAsset ? 'Edit Asset' : 'New Asset'}</Text>
-              <TouchableOpacity onPress={handleSave} disabled={saving}>
+              <Text style={styles.modalTitle}>{editingAsset ? t.editAsset : t.addAsset}</Text>
+              <TouchableOpacity onPress={handleSave} disabled={saving} style={styles.modalIconBtn}>
                 {saving ? (
                   <ActivityIndicator size="small" color={Colors.primary} />
                 ) : (
-                  <Text style={styles.modalSave}>Save</Text>
+                  <Ionicons name="checkmark" size={24} color={Colors.primary} />
                 )}
               </TouchableOpacity>
             </View>
 
             <ScrollView style={styles.modalBody}>
-              <Text style={styles.fieldLabel}>Name</Text>
+              <Text style={styles.fieldLabel}>{t.name}</Text>
               <TextInput
                 style={styles.input}
                 value={form.name}
                 onChangeText={(v) => setForm((f) => ({ ...f, name: v }))}
-                placeholder="e.g. Savings account"
+                placeholder={t.namePlaceholderAsset}
                 placeholderTextColor={Colors.textSecondary}
               />
 
-              <Text style={styles.fieldLabel}>Amount</Text>
+              <Text style={styles.fieldLabel}>{t.amount}</Text>
               <TextInput
                 style={styles.input}
                 value={form.amount}
@@ -171,7 +200,7 @@ export default function AssetsScreen() {
                 keyboardType="decimal-pad"
               />
 
-              <Text style={styles.fieldLabel}>Currency</Text>
+              <Text style={styles.fieldLabel}>{t.currency}</Text>
               <TouchableOpacity
                 style={[styles.input, styles.pickerBtn]}
                 onPress={() => { setShowCurrencyPicker(true); setCurrencySearch(''); }}
@@ -184,21 +213,43 @@ export default function AssetsScreen() {
         </SafeAreaView>
       </Modal>
 
+      {/* Info modal */}
+      <Modal visible={infoVisible} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setInfoVisible(false)}>
+        <SafeAreaView style={styles.modalSafe}>
+          <View style={styles.modalHeader}>
+            <View style={{ width: 36 }} />
+            <Text style={styles.modalTitle}>{t.assets}</Text>
+            <TouchableOpacity onPress={() => setInfoVisible(false)} style={styles.modalIconBtn}>
+              <Ionicons name="close" size={22} color={Colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={styles.modalBody}>
+            <Text style={styles.infoText}>
+              Wpisz tutaj wszystkie środki które obecnie posiadasz, a które są dostępne do spłaty ponoszonych wydatków. Inwestycje, których nie zamierzasz w tym celu używać nie muszą być tu dodane, będą tylko zaciemniać sytuację.
+            </Text>
+            <Text style={styles.infoExamplesTitle}>Przykłady</Text>
+            <Text style={styles.infoExample}>• Stan konta codziennego</Text>
+            <Text style={styles.infoExample}>• Konto walutowe</Text>
+            <Text style={styles.infoExample}>• Konto z rezerwą gotówki</Text>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
       {/* Currency picker modal */}
-      <Modal visible={showCurrencyPicker} animationType="slide" presentationStyle="pageSheet">
+      <Modal visible={showCurrencyPicker} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowCurrencyPicker(false)}>
         <SafeAreaView style={styles.modalSafe}>
           <View style={styles.modalHeader}>
             <View style={{ width: 60 }} />
-            <Text style={styles.modalTitle}>Select Currency</Text>
+            <Text style={styles.modalTitle}>{t.selectCurrency}</Text>
             <TouchableOpacity onPress={() => setShowCurrencyPicker(false)}>
-              <Text style={styles.modalSave}>Done</Text>
+              <Text style={styles.modalDone}>{t.done}</Text>
             </TouchableOpacity>
           </View>
           <TextInput
             style={[styles.input, { margin: Spacing.md }]}
             value={currencySearch}
             onChangeText={setCurrencySearch}
-            placeholder="Search..."
+            placeholder={t.searchCurrency}
             placeholderTextColor={Colors.textSecondary}
           />
           <FlatList
@@ -234,44 +285,92 @@ const styles = StyleSheet.create({
     padding: Spacing.md,
   },
   title: { fontSize: 28, fontWeight: '700', color: Colors.text },
-  addBtn: {
-    backgroundColor: Colors.primary,
+  infoBtn: {
     width: 36,
     height: 36,
-    borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  list: { padding: Spacing.md, gap: Spacing.sm },
-  card: {
+
+  // Table
+  tableWrapper: {
+    flex: 1,
+    marginHorizontal: Spacing.md,
     backgroundColor: Colors.card,
     borderRadius: Radius.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    overflow: 'hidden',
     shadowColor: '#000',
     shadowOpacity: 0.05,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 1 },
     elevation: 2,
   },
-  cardMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
+  tableHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.sm,
+    backgroundColor: Colors.background,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  thCell: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  thRight: { textAlign: 'right' },
+  tableBody: { flex: 1 },
+  tableRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: Spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  tableRowAlt: { backgroundColor: '#F9F9F9' },
   currencyBadge: {
     backgroundColor: Colors.primaryLight,
     borderRadius: Radius.sm,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: Spacing.xs,
-    minWidth: 48,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
     alignItems: 'center',
+    marginRight: Spacing.sm,
   },
-  currencyBadgeText: { fontSize: 12, fontWeight: '700', color: Colors.primary },
-  cardInfo: { flex: 1 },
-  cardName: { fontSize: 15, fontWeight: '600', color: Colors.text },
-  cardAmount: { fontSize: 13, color: Colors.textSecondary, marginTop: 2 },
-  deleteBtn: { padding: Spacing.sm },
+  currencyBadgeText: { fontSize: 11, fontWeight: '700', color: Colors.primary },
+  tdName: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: Colors.text,
+    paddingRight: Spacing.xs,
+  },
+  tdAmount: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.text,
+    textAlign: 'right',
+    paddingRight: Spacing.xs,
+  },
+  tdCell: { alignItems: 'center', justifyContent: 'center' },
+  addRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    paddingVertical: 10,
+    paddingHorizontal: Spacing.sm,
+  },
+  addRowText: { fontSize: 14, color: Colors.textSecondary },
+
   empty: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: Spacing.sm },
   emptyText: { fontSize: 18, fontWeight: '600', color: Colors.textSecondary },
   emptySubText: { fontSize: 14, color: Colors.textSecondary },
+
+  // Modal
   modalSafe: { flex: 1, backgroundColor: Colors.background },
   modalHeader: {
     flexDirection: 'row',
@@ -282,8 +381,8 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.border,
   },
   modalTitle: { fontSize: 17, fontWeight: '600', color: Colors.text },
-  modalCancel: { fontSize: 16, color: Colors.textSecondary },
-  modalSave: { fontSize: 16, fontWeight: '600', color: Colors.primary },
+  modalIconBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  modalDone: { fontSize: 16, fontWeight: '600', color: Colors.primary, minWidth: 60, textAlign: 'right' },
   modalBody: { padding: Spacing.md },
   fieldLabel: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary, marginBottom: Spacing.xs, marginTop: Spacing.md },
   input: {
@@ -297,6 +396,9 @@ const styles = StyleSheet.create({
   },
   pickerBtn: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   pickerValue: { fontSize: 16, color: Colors.text },
+  infoText: { fontSize: 16, color: Colors.text, lineHeight: 24, marginBottom: Spacing.lg },
+  infoExamplesTitle: { fontSize: 13, fontWeight: '700', color: Colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: Spacing.sm },
+  infoExample: { fontSize: 15, color: Colors.text, lineHeight: 26 },
   currencyRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

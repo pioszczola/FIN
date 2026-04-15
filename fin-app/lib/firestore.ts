@@ -12,7 +12,7 @@ import {
   Unsubscribe,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { Asset, Expense, UserSettings } from './types';
+import type { Asset, BalanceSnapshot, Expense, UserSettings } from './types';
 
 // --- Assets ---
 
@@ -88,12 +88,38 @@ export async function deleteExpense(userId: string, expenseId: string): Promise<
   await deleteDoc(doc(db, 'users', userId, 'expenses', expenseId));
 }
 
+// --- Snapshots ---
+
+export async function addSnapshot(
+  userId: string,
+  snapshot: Omit<BalanceSnapshot, 'id'>
+): Promise<void> {
+  await addDoc(collection(db, 'users', userId, 'snapshots'), snapshot);
+}
+
+export function subscribeToSnapshots(
+  userId: string,
+  callback: (snapshots: BalanceSnapshot[]) => void
+): Unsubscribe {
+  const q = query(
+    collection(db, 'users', userId, 'snapshots'),
+    orderBy('timestamp', 'asc')
+  );
+  return onSnapshot(q, (snap) => {
+    callback(snap.docs.map((d) => ({ id: d.id, ...d.data() } as BalanceSnapshot)));
+  });
+}
+
+export async function deleteSnapshot(userId: string, snapshotId: string): Promise<void> {
+  await deleteDoc(doc(db, 'users', userId, 'snapshots', snapshotId));
+}
+
 // --- Settings ---
 
 export async function getSettings(userId: string): Promise<UserSettings> {
   const snap = await getDoc(doc(db, 'users', userId, 'settings', 'prefs'));
   if (snap.exists()) return snap.data() as UserSettings;
-  return { defaultCurrency: 'PLN' };
+  return { defaultCurrency: 'PLN', language: 'en' };
 }
 
 export async function saveSettings(
@@ -107,11 +133,12 @@ export function subscribeToSettings(
   userId: string,
   callback: (settings: UserSettings) => void
 ): Unsubscribe {
+  const defaults: UserSettings = { defaultCurrency: 'PLN', language: 'en' };
   return onSnapshot(doc(db, 'users', userId, 'settings', 'prefs'), (snap) => {
     if (snap.exists()) {
-      callback(snap.data() as UserSettings);
+      callback({ ...defaults, ...snap.data() } as UserSettings);
     } else {
-      callback({ defaultCurrency: 'PLN' });
+      callback(defaults);
     }
   });
 }

@@ -14,6 +14,24 @@ export interface Expense {
   createdAt: number;
 }
 
+export interface BalanceSnapshot {
+  id: string;
+  timestamp: number;
+  netBalance: number;
+  currency: string;
+}
+
+export interface SnapshotSchedule {
+  enabled: boolean;
+  frequency: 'daily' | 'weekly' | 'monthly';
+  hour: number;
+  minute: number;
+  weekday?: number; // 1–7, Sunday=1; used when frequency='weekly'
+  dayOfMonth?: number; // 1–28; used when frequency='monthly'
+}
+
 export interface UserSettings {
   defaultCurrency: string;
+  language: 'en' | 'pl';
+  snapshotSchedule?: SnapshotSchedule;
 }
